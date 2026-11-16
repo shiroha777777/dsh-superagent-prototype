@@ -59,6 +59,24 @@ it('reads a review thread from any of its comments, the first with its file, lin
   expect(thread.messages[0]!.text).toBe('src/render.ts:43\n   const title = view.title\n   const margin = 12\n+  const padding = 8\n\ncomment 1')
   await expect(readGithub(commands, 'github/issues/9/thread/2')).rejects.toThrow('require a pull request')
 })
+it('rejects a review thread whose selected reply has no root in the fetched comments', async () => {
+  vi.spyOn(commands, 'pages').mockResolvedValue([reviewComment(2, 1), reviewComment(3, 1)])
+  await expect(readGithub(commands, 'github/pulls/9/thread/2')).rejects.toThrow(/root/i)
+})
+
+it('does not return orphan replies when the requested review comment is missing', async () => {
+  vi.spyOn(commands, 'pages').mockResolvedValue([reviewComment(2, 1), reviewComment(3, 1)])
+  await expect(readGithub(commands, 'github/pulls/9/thread/1')).rejects.toThrow('No review comment of this PR has that id')
+})
+
+it('keeps the explicit review root first even if equal-time replies are returned before it', async () => {
+  vi.spyOn(commands, 'pages').mockResolvedValue([reviewComment(3, 1), reviewComment(2, 1), reviewComment(1)]
+    .map(comment => ({ ...comment, created_at: '2026-09-09T00:00:00Z' })))
+  expect(await readGithub(commands, 'github/pulls/9/thread/2')).toMatchObject({
+    messages: [{ id: '1' }, { id: '2', reply_to: '1' }, { id: '3', reply_to: '1' }],
+  })
+})
+
 it('reads an Issue or PR as its author, time, title, state, description and a PR\'s branches', async () => {
   vi.spyOn(commands, 'gh').mockResolvedValue({ number: 9, id: 1, title: 'Fix the margin', state: 'open', body: 'Details', draft: true,
     user: { login: 'carol', type: 'User' }, created_at: '2026-09-09T00:00:00Z', html_url: 'https://github.com/acme/widgets/pull/9',

@@ -84,9 +84,13 @@ const DescriptionSchema = IssueSchema.extend({
 })
 async function reviewThread(commands: Commands, number: number, comment: number, tally?: Tally): Promise<GithubComment[]> {
   const comments = await commands.pages(CommentSchema, `pulls/${number}/comments?per_page=100`, tally)
-  const root = comments.find(item => item.id === comment)?.in_reply_to_id ?? comment
-  return comments.filter(item => item.id === root || item.in_reply_to_id === root)
-    .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+  const selected = comments.find(item => item.id === comment)
+  if (!selected) return []
+  const root = selected.in_reply_to_id == null ? selected : comments.find(item => item.id === selected.in_reply_to_id)
+  if (!root) throw new Error('The root of this review thread is unavailable')
+  const replies = comments.filter(item => item.in_reply_to_id === root.id)
+    .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id - b.id)
+  return [root, ...replies]
 }
 function threadMessages(thread: GithubComment[], id: (comment: GithubComment) => string): ContextMessage[] {
   const [first] = thread
